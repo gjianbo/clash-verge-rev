@@ -1,0 +1,185 @@
+name: Build Tailscale Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - tailscale-windows
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: tailscale-release
+  cancel-in-progress: false
+
+env:
+  TAG_NAME: tailscale-build
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: short
+  HUSKY: 0
+
+jobs:
+  plan:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.upload_release.outputs.id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Write release body
+        shell: bash
+        run: |
+          cat > release-body.md <<EOF
+          Tailscale-enabled build (in-core tsnet outbound + status API).
+
+          Version: ${{ steps.version.outputs.version }}
+          Core: patched mihomo $(node -p "require('./src-tauri/core-release.json').buildVersion")
+          Created: $(date -u '+%Y-%m-%d %H:%M UTC')
+
+          - Windows: \`Clash.Verge_${{ steps.version.outputs.version }}_x64-setup.exe\`, \`..._arm64-setup.exe\`
+          - macOS: \`Clash.Verge_${{ steps.version.outputs.version }}_aarch64.dmg\`, \`..._x64.dmg\`
+
+          Installers are unsigned: approve the SmartScreen/Gatekeeper prompt to run them.
+          Stop the official Tailscale client before enabling this build's Tailscale.
+          Do not use in-app updates: they would replace this build with an official release.
+          EOF
+
+      - name: Create or update release
+        id: upload_release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          target_commitish: ${{ github.sha }}
+          name: Clash Verge Tailscale Build
+          body_path: release-body.md
+          prerelease: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          generate_release_notes: false
+          fail_on_unmatched_files: false
+
+  core:
+    name: Patched core (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-pc-windows-msvc
+          - aarch64-pc-windows-msvc
+          - aarch64-apple-darwin
+          - x86_64-apple-darwin
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6.1.0
+        with:
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.22.1'
+          cache: pnpm
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Tailscale-patched core
+        run: node scripts/build-core.mjs --target ${{ matrix.target }}
+
+      - name: Upload core
+        uses: actions/upload-artifact@v7
+        with:
+          name: core-${{ matrix.target }}
+          path: src-tauri/sidecar/verge-mihomo-${{ matrix.target }}*
+          if-no-files-found: error
+
+  app:
+    name: ${{ matrix.platform }} (${{ matrix.target }})
+    needs: [plan, core]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Windows x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - platform: Windows ARM64
+            os: windows-latest
+            target: aarch64-pc-windows-msvc
+          - platform: macOS Apple Silicon
+            os: macos-latest
+            target: aarch64-apple-darwin
+          - platform: macOS Intel
+            os: macos-latest
+            target: x86_64-apple-darwin
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.99.1'
+          targets: ${{ matrix.target }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6.1.0
+        with:
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.22.1'
+          cache: pnpm
+
+      - name: Download patched core
+        uses: actions/download-artifact@v8
+        with:
+          name: core-${{ matrix.target }}
+          path: src-tauri/sidecar
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare platform resources
+        run: pnpm run prebuild ${{ matrix.target }}
+
+      - name: Disable updater artifacts
+        shell: bash
+        run: echo '{"bundle":{"createUpdaterArtifacts":false}}' > build-config.json
+
+      - name: Build and publish to release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          releaseId: ${{ needs.plan.outputs.release_id }}
+          tagName: ${{ env.TAG_NAME }}
+          releaseName: Clash Verge Tailscale Build
+          releaseDraft: false
+          prerelease: true
+          tauriScript: pnpm
+          args: --target ${{ matrix.target }} --config build-config.json
