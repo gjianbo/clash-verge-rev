@@ -16,6 +16,7 @@ pub mod runstate;
 pub(crate) mod runtime_bundle;
 pub mod service;
 pub mod sysopt;
+pub(crate) mod tailscale;
 pub mod timer;
 pub mod tray;
 pub mod updater;

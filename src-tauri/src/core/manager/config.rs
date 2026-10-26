@@ -359,6 +359,7 @@ impl CoreManager {
         let result = self.apply_config(run_path).await;
         self.retain_applied_runtime(&Config::runtime().await, previous, &result);
         result?;
+        crate::core::tailscale::wake();
         // Under the lifecycle lock, so a stop for exit waits for this write instead of outrunning it.
         #[cfg(target_os = "macos")]
         {

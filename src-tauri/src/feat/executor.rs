@@ -35,6 +35,8 @@ async fn ensure_restart(manager: &CoreManager) -> Result<()> {
         Config::runtime().await.apply();
     }
     result?;
+    // A restart reloads the config from disk, which creates a fresh Tailscale outbound.
+    crate::core::tailscale::wake();
     Ok(())
 }
 
