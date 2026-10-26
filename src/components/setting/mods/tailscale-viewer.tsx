@@ -58,6 +58,9 @@ export function TailscaleViewer({ ref }: { ref?: Ref<DialogRef> }) {
 
   const routeItems = splitRoutes(values.routes)
   const routeError = routeItems.length > 0 && !areValidIpCidrs(routeItems)
+  // The status API can only answer for what the running core has loaded, so the
+  // gate is the saved setting rather than the unsaved form state.
+  const enabled = verge?.tailscale?.enable ?? false
 
   const openViewer = async () => {
     const settings = verge?.tailscale
@@ -138,7 +141,7 @@ export function TailscaleViewer({ ref }: { ref?: Ref<DialogRef> }) {
               size="small"
               startIcon={<DevicesRounded />}
               onClick={() => {
-                if (!values.enable) {
+                if (!enabled) {
                   showNotice.error(
                     t('settings.modals.tailscale.messages.enableFirst'),
                   )
