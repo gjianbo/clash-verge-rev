@@ -15,8 +15,47 @@ env:
   HUSKY: 0
 
 jobs:
+  core:
+    name: Patched core (Windows x64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6.1.0
+        with:
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.22.1'
+          cache: pnpm
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Tailscale-patched core
+        run: node scripts/build-core.mjs --target x86_64-pc-windows-msvc
+
+      - name: Upload core
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-core
+          path: src-tauri/sidecar/verge-mihomo-x86_64-pc-windows-msvc.exe
+          if-no-files-found: error
+
   windows-x64:
     name: Windows x64 installer
+    needs: core
     runs-on: windows-latest
     timeout-minutes: 120
     steps:
@@ -40,21 +79,14 @@ jobs:
           node-version: '24.22.1'
           cache: pnpm
 
-      - name: Install Go
-        uses: actions/setup-go@v5
+      - name: Download patched core
+        uses: actions/download-artifact@v8
         with:
-          go-version: '1.25.x'
-          cache: false
-
-      - name: Configure git line endings
-        shell: bash
-        run: git config --global core.autocrlf false
+          name: windows-core
+          path: src-tauri/sidecar
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Build Tailscale-patched core
-        run: node scripts/build-core.mjs --target x86_64-pc-windows-msvc
 
       - name: Prepare Windows resources
         run: pnpm run prebuild x86_64-pc-windows-msvc
