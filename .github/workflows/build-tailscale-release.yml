@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: tailscale-release
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   TAG_NAME: tailscale-build
@@ -45,8 +45,8 @@ jobs:
           Core: patched mihomo $(node -p "require('./src-tauri/core-release.json').buildVersion")
           Created: $(date -u '+%Y-%m-%d %H:%M UTC')
 
-          - Windows: \`Clash.Verge_${{ steps.version.outputs.version }}_x64-setup.exe\`, \`..._arm64-setup.exe\`
-          - macOS: \`Clash.Verge_${{ steps.version.outputs.version }}_aarch64.dmg\`, \`..._x64.dmg\`
+          - Windows x64: \`Clash.Verge_${{ steps.version.outputs.version }}_x64-setup.exe\`
+          - macOS Apple Silicon: \`Clash.Verge_${{ steps.version.outputs.version }}_aarch64.dmg\`
 
           Installers are unsigned: approve the SmartScreen/Gatekeeper prompt to run them.
           Stop the official Tailscale client before enabling this build's Tailscale.
@@ -75,9 +75,7 @@ jobs:
       matrix:
         target:
           - x86_64-pc-windows-msvc
-          - aarch64-pc-windows-msvc
           - aarch64-apple-darwin
-          - x86_64-apple-darwin
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -124,15 +122,9 @@ jobs:
           - platform: Windows x64
             os: windows-latest
             target: x86_64-pc-windows-msvc
-          - platform: Windows ARM64
-            os: windows-latest
-            target: aarch64-pc-windows-msvc
           - platform: macOS Apple Silicon
             os: macos-latest
             target: aarch64-apple-darwin
-          - platform: macOS Intel
-            os: macos-latest
-            target: x86_64-apple-darwin
     steps:
       - name: Checkout
         uses: actions/checkout@v7
