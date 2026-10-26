@@ -111,6 +111,7 @@
           "clashCore": "Clash Core",
           "openUwpTool": "Open UWP tool",
           "updateGeoData": "Update GeoData",
+          "tailscale": "Tailscale",
           "tunnels": {
             "title": "Tunnel Management",
             "localAddr": "Local Listen Address",
@@ -650,6 +651,51 @@
       "fields": {
         "ipAddress": "IP Address",
         "macAddress": "MAC Address"
+      }
+    },
+    "tailscale": {
+      "title": "Tailscale",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "fields": {
+        "enable": "Enable Tailscale",
+        "name": "Outbound name",
+        "hostname": "Device hostname",
+        "authKey": "Auth key",
+        "acceptRoutes": "Accept subnet routes",
+        "routes": "Extra CIDRs",
+        "udp": "UDP",
+        "dialerProxy": "Control plane proxy",
+        "dialerProxyPlaceholder": "Proxy group or node",
+        "exitNode": "Exit node"
+      },
+      "messages": {
+        "description": "Runs Tailscale inside the core, so mihomo remains the only owner of TUN, routes and DNS. Stop the official Tailscale client first.",
+        "authKeyHint": "Create a reusable, non-expiring key at login.tailscale.com/admin/settings/keys.",
+        "authKeyRequired": "An auth key is required the first time you enable Tailscale.",
+        "acceptRoutesHint": "Accept routes advertised by subnet routers in your tailnet.",
+        "routesHint": "Destination CIDRs reachable through Tailscale, one per line or comma-separated.",
+        "invalidRoutes": "Enter valid CIDRs, for example 192.168.20.0/24.",
+        "udpHint": "Allow UDP through the tailnet.",
+        "dialerProxyHint": "Optional. Sends tsnet control and DERP traffic through this proxy.",
+        "exitNodeHint": "Optional. Routes all tailnet traffic through this exit node.",
+        "enableFirst": "Enable and save Tailscale before opening status.",
+        "saved": "Tailscale settings saved",
+        "conflict": "The official Tailscale client still owns a tailnet address on {{interfaces}}. Stop it to avoid route and DNS conflicts."
+      },
+      "status": {
+        "title": "Tailscale Status",
+        "tailnet": "Tailnet {{name}}",
+        "magicDns": "MagicDNS {{suffix}}",
+        "version": "tsnet {{version}}",
+        "authorize": "Authorize this device",
+        "peers": "Peers ({{count}})",
+        "noPeers": "No peers in this tailnet yet.",
+        "magicDnsNeedsTun": "MagicDNS names resolve through the core only in TUN mode. With TUN off, open peers by their 100.x address.",
+        "exitNode": "Exit node",
+        "ping": "Ping",
+        "coreUnsupported": "The running core does not include the Tailscale status API. Install the Tailscale-enabled core to see peers here.",
+        "notConfigured": "The core has not loaded Tailscale yet. Save the settings and restart the core."
       }
     }
   },

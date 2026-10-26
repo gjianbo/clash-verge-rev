@@ -226,6 +226,16 @@ export const commands = {
     __TAURI_INVOKE<UnlockItem[]>('check_media_unlock', { onComplete }),
   checkMediaUnlockItem: (name: string) =>
     __TAURI_INVOKE<UnlockItem>('check_media_unlock_item', { name }),
+  getTailscaleStatus: () =>
+    __TAURI_INVOKE<TailscaleStatus>('get_tailscale_status'),
+  pingTailscalePeer: (ip: string) =>
+    __TAURI_INVOKE<TailscalePing>('ping_tailscale_peer', { ip }),
+  /**
+   *  Detects an official Tailscale client that still owns a tailnet address, which would fight
+   *  mihomo for the 100.64.0.0/10 route and MagicDNS.
+   */
+  getTailscaleConflict: () =>
+    __TAURI_INVOKE<TailscaleConflict>('get_tailscale_conflict'),
 }
 
 /* Types */
@@ -330,6 +340,58 @@ export type IProfiles_Serialize = {
 /**  ### `verge.yaml` schema */
 export type IVerge = IVerge_Serialize | IVerge_Deserialize
 
+/**
+ *  Settings for the in-core Tailscale outbound. Replaces the official Tailscale client so
+ *  mihomo stays the only owner of TUN, routes and DNS.
+ */
+export type IVergeTailscale =
+  | IVergeTailscale_Serialize
+  | IVergeTailscale_Deserialize
+
+/**
+ *  Settings for the in-core Tailscale outbound. Replaces the official Tailscale client so
+ *  mihomo stays the only owner of TUN, routes and DNS.
+ */
+export type IVergeTailscale_Deserialize = {
+  enable?: boolean | null
+  /**  Outbound and rule name. */
+  name?: string | null
+  /**  Node name shown in the tailnet. */
+  hostname?: string | null
+  auth_key?: string | null
+  /**  Relative to the core data directory so sidecar and service each keep their own login. */
+  state_dir?: string | null
+  accept_routes?: boolean | null
+  /**  Extra destination CIDRs reachable through the tailnet (subnet routes). */
+  routes?: string[] | null
+  udp?: boolean | null
+  /**  Proxy that carries tsnet control and DERP traffic. */
+  dialer_proxy?: string | null
+  exit_node?: string | null
+}
+
+/**
+ *  Settings for the in-core Tailscale outbound. Replaces the official Tailscale client so
+ *  mihomo stays the only owner of TUN, routes and DNS.
+ */
+export type IVergeTailscale_Serialize = {
+  enable: boolean | null
+  /**  Outbound and rule name. */
+  name: string | null
+  /**  Node name shown in the tailnet. */
+  hostname: string | null
+  auth_key?: string | null
+  /**  Relative to the core data directory so sidecar and service each keep their own login. */
+  state_dir: string | null
+  accept_routes: boolean | null
+  /**  Extra destination CIDRs reachable through the tailnet (subnet routes). */
+  routes: string[] | null
+  udp: boolean | null
+  /**  Proxy that carries tsnet control and DERP traffic. */
+  dialer_proxy: string | null
+  exit_node: string | null
+}
+
 export type IVergeTestItem = {
   uid?: string | null
   name?: string | null
@@ -393,6 +455,7 @@ export type IVerge_Deserialize = {
   pac_file_content?: string | null
   proxy_host?: string | null
   theme_setting?: IVergeTheme | null
+  tailscale?: IVergeTailscale_Deserialize | null
   web_ui_list?: string[] | null
   clash_core?: string | null
   /**  format: {func},{key} */
@@ -483,6 +546,7 @@ export type IVerge_Serialize = {
   pac_file_content: string | null
   proxy_host: string | null
   theme_setting: IVergeTheme | null
+  tailscale?: IVergeTailscale_Serialize | null
   web_ui_list: string[] | null
   clash_core?: string | null
   /**  format: {func},{key} */
@@ -989,6 +1053,52 @@ export type SystemProxy = {
   enable: boolean
   server: string
   bypass: string
+}
+
+export type TailscaleConflict = {
+  conflict: boolean
+  interfaces: string[]
+}
+
+export type TailscalePeer = {
+  hostname: string
+  dnsName: string | null
+  os: string | null
+  ips: string[]
+  online: boolean
+  active: boolean
+  exitNode: boolean
+  exitNodeOption: boolean
+  relay: string | null
+  endpoint: string | null
+  lastSeen: string | null
+}
+
+export type TailscalePing = {
+  ip: string
+  nodeIp: string | null
+  nodeName: string | null
+  latencySeconds: number | null
+  endpoint: string | null
+  relay: string | null
+  error: string | null
+}
+
+export type TailscaleStatus = {
+  available: boolean
+  backendState: string
+  version: string
+  hostname: string
+  dnsName: string | null
+  tailnet: string | null
+  magicDnsSuffix: string | null
+  magicDnsEnabled: boolean
+  authUrl: string | null
+  ips: string[]
+  os: string | null
+  health: string[]
+  self: TailscalePeer | null
+  peers: TailscalePeer[]
 }
 
 export type ToggleableProxyPort = {

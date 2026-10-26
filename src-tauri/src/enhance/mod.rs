@@ -4,6 +4,7 @@ pub mod field;
 mod merge;
 mod script;
 pub mod seq;
+mod tailscale;
 mod tun;
 
 use self::{
@@ -12,13 +13,14 @@ use self::{
     merge::use_merge,
     script::use_script,
     seq::{SeqMap, use_seq},
+    tailscale::use_tailscale,
     tun::use_tun,
 };
 use crate::config::dns::{DnsOverrideState, dns_override_source};
 use crate::core::handle::Handle;
 use crate::utils::dirs;
 use crate::{
-    config::{Config, IProfiles, IVerge, PrfItem},
+    config::{Config, IProfiles, IVerge, IVergeTailscale, PrfItem},
     constants,
     utils::tmpl,
 };
@@ -41,6 +43,7 @@ struct ConfigValues {
     http_enabled: bool,
     enable_dns_settings: bool,
     dns_override_confirmation: Option<String>,
+    tailscale: Option<IVergeTailscale>,
     enable_external_controller: bool,
     #[cfg(not(target_os = "windows"))]
     redir_enabled: bool,
@@ -127,6 +130,7 @@ async fn get_config_values(profile_uid: &str) -> ConfigValues {
     let enable_external_controller = enable_external_controller.unwrap_or(false);
     let dns_settings = verge_arc.dns_settings_for(profile_uid);
     let dns_override_confirmation = dns_settings.confirmation;
+    let tailscale = verge_arc.tailscale.clone();
 
     let (clash_core, enable_tun, enable_builtin, socks_enabled, http_enabled, enable_dns_settings) = (
         Some(verge_arc.get_valid_clash_core()),
@@ -155,6 +159,7 @@ async fn get_config_values(profile_uid: &str) -> ConfigValues {
         http_enabled,
         enable_dns_settings,
         dns_override_confirmation,
+        tailscale,
         enable_external_controller,
         #[cfg(not(target_os = "windows"))]
         redir_enabled,
@@ -886,6 +891,7 @@ pub async fn enhance(
         http_enabled,
         enable_dns_settings,
         dns_override_confirmation,
+        tailscale,
         enable_external_controller,
         #[cfg(not(target_os = "windows"))]
         redir_enabled,
@@ -959,6 +965,7 @@ pub async fn enhance(
 
     notify_discarded_keys(authoritative.overridden(&authoritative, &authoritative.current(&config)));
     let config = authoritative.enforce(config);
+    let config = use_tailscale(config, tailscale.as_ref());
     let config = ensure_lan_bind_address(config);
 
     let config = cleanup_proxy_groups(config);

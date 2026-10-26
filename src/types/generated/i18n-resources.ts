@@ -1183,6 +1183,51 @@ export interface TranslationResources {
             proxyGuard: string
           }
         }
+        tailscale: {
+          disabled: string
+          enabled: string
+          fields: {
+            acceptRoutes: string
+            authKey: string
+            dialerProxy: string
+            dialerProxyPlaceholder: string
+            enable: string
+            exitNode: string
+            hostname: string
+            name: string
+            routes: string
+            udp: string
+          }
+          messages: {
+            acceptRoutesHint: string
+            authKeyHint: string
+            authKeyRequired: string
+            conflict: string
+            description: string
+            dialerProxyHint: string
+            enableFirst: string
+            exitNodeHint: string
+            invalidRoutes: string
+            routesHint: string
+            saved: string
+            udpHint: string
+          }
+          status: {
+            authorize: string
+            coreUnsupported: string
+            exitNode: string
+            magicDns: string
+            magicDnsNeedsTun: string
+            noPeers: string
+            notConfigured: string
+            peers: string
+            ping: string
+            tailnet: string
+            title: string
+            version: string
+          }
+          title: string
+        }
         tun: {
           fields: {
             autoDetectInterface: string
@@ -1268,6 +1313,7 @@ export interface TranslationResources {
               logLevel: string
               openUwpTool: string
               portConfig: string
+              tailscale: string
               tunnels: {
                 actions: {
                   add: string

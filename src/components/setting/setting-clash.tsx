@@ -24,6 +24,7 @@ import { HeaderConfiguration } from './mods/external-controller-cors'
 import { GuardState } from './mods/guard-state'
 import { NetworkInterfaceViewer } from './mods/network-interface-viewer'
 import { SettingItem, SettingList } from './mods/setting-comp'
+import { TailscaleViewer } from './mods/tailscale-viewer'
 import { TunnelsViewer } from './mods/tunnels-viewer'
 import { WebUIViewer } from './mods/web-ui-viewer'
 
@@ -68,6 +69,7 @@ const SettingClash = ({ onError }: Props) => {
   const dnsRef = useRef<DialogRef>(null)
   const corsRef = useRef<DialogRef>(null)
   const tunnelRef = useRef<DialogRef>(null)
+  const tailscaleRef = useRef<DialogRef>(null)
 
   const onSwitchFormat = (_e: any, value: boolean) => value
   const onChangeData = (patch: Partial<IConfigData>) => {
@@ -155,6 +157,7 @@ const SettingClash = ({ onError }: Props) => {
       </BaseDialog>
       <HeaderConfiguration ref={corsRef} />
       <TunnelsViewer ref={tunnelRef} />
+      <TailscaleViewer ref={tailscaleRef} />
       <SettingItem
         label={t('settings.sections.clash.form.fields.allowLan')}
         extra={
@@ -349,6 +352,26 @@ const SettingClash = ({ onError }: Props) => {
         label={t('settings.sections.clash.form.fields.tunnels.title')}
         onClick={() => tunnelRef.current?.open()}
       />
+
+      <SettingItem
+        label={t('settings.sections.clash.form.fields.tailscale')}
+        onClick={() => tailscaleRef.current?.open()}
+        extra={
+          <TooltipIcon
+            icon={SettingsRounded}
+            onClick={(event) => {
+              event.stopPropagation()
+              tailscaleRef.current?.open()
+            }}
+          />
+        }
+      >
+        <Typography sx={{ py: '7px', pr: 1 }}>
+          {verge?.tailscale?.enable
+            ? t('settings.modals.tailscale.enabled')
+            : t('settings.modals.tailscale.disabled')}
+        </Typography>
+      </SettingItem>
     </SettingList>
   )
 }

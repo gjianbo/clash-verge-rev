@@ -1,0 +1,6 @@
+{
+  "releaseRepo": "MetaCubeX/mihomo",
+  "buildRepo": "MetaCubeX/mihomo",
+  "buildVersion": "v1.19.33",
+  "patches": ["0001-tailscale-status-api.patch"]
+}

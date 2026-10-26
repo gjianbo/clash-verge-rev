@@ -111,6 +111,7 @@
           "clashCore": "Clash 内核",
           "openUwpTool": "UWP 工具",
           "updateGeoData": "更新 GeoData",
+          "tailscale": "Tailscale",
           "tunnels": {
             "title": "流量隧道管理",
             "localAddr": "本地监听地址",
@@ -650,6 +651,51 @@
       "fields": {
         "ipAddress": "IP 地址",
         "macAddress": "MAC 地址"
+      }
+    },
+    "tailscale": {
+      "title": "Tailscale",
+      "enabled": "已启用",
+      "disabled": "未启用",
+      "fields": {
+        "enable": "启用 Tailscale",
+        "name": "出站名称",
+        "hostname": "设备主机名",
+        "authKey": "Auth Key",
+        "acceptRoutes": "接受子网路由",
+        "routes": "额外 CIDR",
+        "udp": "UDP",
+        "dialerProxy": "控制面代理",
+        "dialerProxyPlaceholder": "代理组或节点",
+        "exitNode": "出口节点"
+      },
+      "messages": {
+        "description": "在内核内运行 Tailscale，使 mihomo 始终是 TUN、路由和 DNS 的唯一接管者。启用前请先停用官方 Tailscale 客户端。",
+        "authKeyHint": "在 login.tailscale.com/admin/settings/keys 生成可复用、不过期的 Key。",
+        "authKeyRequired": "首次启用 Tailscale 时必须填写 Auth Key。",
+        "acceptRoutesHint": "接受 tailnet 中子网路由广播的路由。",
+        "routesHint": "需要通过 Tailscale 访问的目标 CIDR，每行一个或用逗号分隔。",
+        "invalidRoutes": "请输入合法的 CIDR，例如 192.168.20.0/24。",
+        "udpHint": "允许通过 tailnet 转发 UDP。",
+        "dialerProxyHint": "可选。让 tsnet 的控制面和 DERP 流量走这个代理。",
+        "exitNodeHint": "可选。让所有 tailnet 流量走该出口节点。",
+        "enableFirst": "请先启用并保存 Tailscale，再打开状态页。",
+        "saved": "Tailscale 设置已保存",
+        "conflict": "官方 Tailscale 客户端仍占用 tailnet 地址（{{interfaces}}）。请停用它，否则路由和 DNS 会冲突。"
+      },
+      "status": {
+        "title": "Tailscale 状态",
+        "tailnet": "网络 {{name}}",
+        "magicDns": "MagicDNS {{suffix}}",
+        "version": "tsnet {{version}}",
+        "authorize": "授权此设备",
+        "peers": "终端（{{count}}）",
+        "noPeers": "该 tailnet 中还没有其他终端。",
+        "magicDnsNeedsTun": "只有 TUN 模式下 MagicDNS 域名才会经由内核解析；未开启 TUN 时请直接用 100.x 地址访问。",
+        "exitNode": "出口节点",
+        "ping": "测延迟",
+        "coreUnsupported": "当前内核未包含 Tailscale 状态 API。安装带 Tailscale 补丁的内核后才能查看终端列表。",
+        "notConfigured": "内核尚未加载 Tailscale。保存设置并重启内核后再试。"
       }
     }
   },

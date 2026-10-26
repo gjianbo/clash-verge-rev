@@ -16,6 +16,11 @@ import { log_debug, log_error, log_info, log_success } from './utils.mjs'
 /** Prepares platform resources, caching versions and unchanged files unless `--force` is used. */
 
 const cwd = process.cwd()
+const CORE_RELEASE = JSON.parse(
+  fs.readFileSync(path.join(cwd, 'src-tauri/core-release.json'), 'utf8'),
+)
+const CORE_RELEASE_REPO =
+  process.env.VERGE_CORE_REPO || CORE_RELEASE.releaseRepo || 'MetaCubeX/mihomo'
 const TEMP_DIR = path.join(cwd, 'node_modules/.verge')
 const FORCE = process.argv.includes('--force') || process.argv.includes('-f')
 const VERSION_CACHE_FILE = path.join(TEMP_DIR, '.version_cache.json')
@@ -160,14 +165,12 @@ async function updateHashCache(targetPath) {
 }
 
 // Mihomo release maps
-const META_ALPHA_VERSION_URL =
-  'https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/version.txt'
-const META_ALPHA_URL_PREFIX = `https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha`
+const META_ALPHA_VERSION_URL = `https://github.com/${CORE_RELEASE_REPO}/releases/download/Prerelease-Alpha/version.txt`
+const META_ALPHA_URL_PREFIX = `https://github.com/${CORE_RELEASE_REPO}/releases/download/Prerelease-Alpha`
 let META_ALPHA_VERSION
 
-const META_VERSION_URL =
-  'https://github.com/MetaCubeX/mihomo/releases/latest/download/version.txt'
-const META_URL_PREFIX = `https://github.com/MetaCubeX/mihomo/releases/download`
+const META_VERSION_URL = `https://github.com/${CORE_RELEASE_REPO}/releases/latest/download/version.txt`
+const META_URL_PREFIX = `https://github.com/${CORE_RELEASE_REPO}/releases/download`
 let META_VERSION
 
 const META_ALPHA_MAP = {

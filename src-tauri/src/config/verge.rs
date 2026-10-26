@@ -10,6 +10,41 @@ use log::LevelFilter;
 use serde::{Deserialize, Serialize};
 use smartstring::alias::String;
 
+/// Settings for the in-core Tailscale outbound. Replaces the official Tailscale client so
+/// mihomo stays the only owner of TUN, routes and DNS.
+#[derive(Default, Debug, Clone, Deserialize, Serialize, specta::Type)]
+#[serde(default)]
+pub struct IVergeTailscale {
+    pub enable: Option<bool>,
+    /// Outbound and rule name.
+    #[specta(type = Option<std::string::String>)]
+    pub name: Option<String>,
+    /// Node name shown in the tailnet.
+    #[specta(type = Option<std::string::String>)]
+    pub hostname: Option<String>,
+    #[serde(
+        serialize_with = "serialize_encrypted",
+        deserialize_with = "deserialize_encrypted",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    #[specta(type = Option<std::string::String>)]
+    pub auth_key: Option<String>,
+    /// Relative to the core data directory so sidecar and service each keep their own login.
+    #[specta(type = Option<std::string::String>)]
+    pub state_dir: Option<String>,
+    pub accept_routes: Option<bool>,
+    /// Extra destination CIDRs reachable through the tailnet (subnet routes).
+    #[specta(type = Option<Vec<std::string::String>>)]
+    pub routes: Option<Vec<String>>,
+    pub udp: Option<bool>,
+    /// Proxy that carries tsnet control and DERP traffic.
+    #[specta(type = Option<std::string::String>)]
+    pub dialer_proxy: Option<String>,
+    #[specta(type = Option<std::string::String>)]
+    pub exit_node: Option<String>,
+}
+
 /// ### `verge.yaml` schema
 #[derive(Default, Debug, Clone, Deserialize, Serialize, specta::Type)]
 #[serde(default)]
@@ -109,6 +144,10 @@ pub struct IVerge {
     pub proxy_host: Option<String>,
 
     pub theme_setting: Option<IVergeTheme>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tailscale: Option<IVergeTailscale>,
+
     #[specta(type = Option<Vec<std::string::String>>)]
     pub web_ui_list: Option<Vec<String>>,
 
@@ -421,6 +460,7 @@ impl IVerge {
             auto_light_weight_minutes: Some(10),
             enable_dns_settings: Some(false),
             home_cards: None,
+            tailscale: None,
             enable_external_controller: Some(false),
             ..Self::default()
         }
@@ -493,6 +533,7 @@ impl IVerge {
         patch!(pac_file_content);
         patch!(proxy_host);
         patch!(theme_setting);
+        patch!(tailscale);
         patch!(web_ui_list);
         patch!(clash_core);
         patch!(hotkeys);

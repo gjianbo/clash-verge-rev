@@ -15,9 +15,16 @@ import type {
   ProfileSelection,
   ProfilePatch,
   ProfileCreate,
+  TailscaleConflict,
+  TailscalePing,
+  TailscaleStatus,
 } from './bindings'
 
 export type {
+  TailscaleConflict,
+  TailscalePeer,
+  TailscalePing,
+  TailscaleStatus,
   RunningMode,
   RunStateView as RunState,
   FailedOperation,
@@ -32,6 +39,18 @@ export type {
 
 export async function copyClashEnv() {
   return commands.copyClashEnv()
+}
+
+export async function getTailscaleStatus(): Promise<TailscaleStatus> {
+  return commands.getTailscaleStatus()
+}
+
+export async function pingTailscalePeer(ip: string): Promise<TailscalePing> {
+  return commands.pingTailscalePeer(ip)
+}
+
+export async function getTailscaleConflict(): Promise<TailscaleConflict> {
+  return commands.getTailscaleConflict()
 }
 
 export async function getProfiles(): Promise<IProfilesConfig> {

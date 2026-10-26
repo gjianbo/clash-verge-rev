@@ -96,6 +96,9 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
             cmd::get_unlock_items,
             cmd::check_media_unlock,
             cmd::check_media_unlock_item,
+            cmd::get_tailscale_status,
+            cmd::ping_tailscale_peer,
+            cmd::get_tailscale_conflict,
         ])
         .error_handling(tauri_specta::ErrorHandlingMode::Throw)
         .dangerously_cast_bigints_to_number()

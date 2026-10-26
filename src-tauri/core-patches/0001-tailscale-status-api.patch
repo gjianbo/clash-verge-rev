@@ -1,0 +1,327 @@
+diff --git a/adapter/outbound/tailscale.go b/adapter/outbound/tailscale.go
+index 2d487da..985ce72 100644
+--- a/adapter/outbound/tailscale.go
++++ b/adapter/outbound/tailscale.go
+@@ -25,6 +25,7 @@ import (
+ 	"github.com/metacubex/tailscale/envknob"
+ 	"github.com/metacubex/tailscale/hostinfo"
+ 	"github.com/metacubex/tailscale/ipn"
++	"github.com/metacubex/tailscale/ipn/ipnstate"
+ 	"github.com/metacubex/tailscale/net/netmon"
+ 	"github.com/metacubex/tailscale/tailcfg"
+ 	"github.com/metacubex/tailscale/tsnet"
+@@ -66,6 +67,27 @@ type TailscaleOption struct {
+ 	ExitNodeAllowLANAccess *bool  `proxy:"exit-node-allow-lan-access,omitempty"`
+ }
+ 
++var tailscaleRegistry sync.Map
++
++// LookupTailscale returns a live Tailscale outbound instance, if any.
++// It lets the client query tsnet status without depending on how mihomo
++// wraps adapters internally.
++func LookupTailscale() *Tailscale {
++	var found *Tailscale
++
++	tailscaleRegistry.Range(func(_, value any) bool {
++		if ts, ok := value.(*Tailscale); ok {
++			found = ts
++
++			return false
++		}
++
++		return true
++	})
++
++	return found
++}
++
+ func init() {
+ 	hostinfo.RegisterHostinfoNewHook(func(hi *tailcfg.Hostinfo) {
+ 		versionDotTxt := strings.TrimSpace(ts.VersionDotTxt)
+@@ -180,6 +202,7 @@ func NewTailscale(option TailscaleOption) (*Tailscale, error) {
+ 	dnsTransport := tailscaleDNSTransport{tailscale: outbound}
+ 	outbound.dnsResolver = dns.NewResolverFromClient(dnsTransport)
+ 	outbound.unregisterDNSResolver = dns.RegisterTailscaleDnsClient(option.Name, dnsTransport)
++	tailscaleRegistry.Store(option.Name, outbound)
+ 	return outbound, nil
+ }
+ 
+@@ -466,6 +489,7 @@ func (t *Tailscale) IsL3Protocol(metadata *C.Metadata) bool {
+ 
+ func (t *Tailscale) Close() error {
+ 	t.cancel()
++	tailscaleRegistry.Delete(t.option.Name)
+ 	if t.unregisterDNSResolver != nil {
+ 		t.unregisterDNSResolver()
+ 	}
+@@ -477,3 +501,33 @@ func (t *Tailscale) Close() error {
+ 	}
+ 	return nil
+ }
++
++// Status reports the current tsnet state, including this node and all peers.
++// It is used by the client to render a Tailscale status page.
++func (t *Tailscale) Status(ctx context.Context) (*ipnstate.Status, error) {
++	if err := t.ensureStarted(ctx); err != nil {
++		return nil, err
++	}
++
++	lc, err := t.server.LocalClient()
++	if err != nil {
++		return nil, err
++	}
++
++	return lc.Status(ctx)
++}
++
++// Ping sends a disco ping to the given tailnet address, reporting latency and
++// the endpoint actually used (direct vs relay).
++func (t *Tailscale) Ping(ctx context.Context, ip netip.Addr) (*ipnstate.PingResult, error) {
++	if err := t.ensureStarted(ctx); err != nil {
++		return nil, err
++	}
++
++	lc, err := t.server.LocalClient()
++	if err != nil {
++		return nil, err
++	}
++
++	return lc.Ping(ctx, ip, tailcfg.PingDisco)
++}
+diff --git a/hub/route/server.go b/hub/route/server.go
+index 6d37d48..76760e6 100644
+--- a/hub/route/server.go
++++ b/hub/route/server.go
+@@ -134,6 +134,7 @@ func router(isDebug bool, secret string, dohServer string, cors Cors) *chi.Mux {
+ 		r.Mount("/providers/rules", ruleProviderRouter())
+ 		r.Mount("/cache", cacheRouter())
+ 		r.Mount("/dns", dnsRouter())
++		r.Mount("/tailscale", tailscaleRouter())
+ 		r.Mount("/storage", storageRouter())
+ 		if !embedMode { // disallow restart in embed mode
+ 			r.Mount("/restart", restartRouter())
+diff --git a/hub/route/tailscale.go b/hub/route/tailscale.go
+new file mode 100644
+index 0000000..73b330f
+--- /dev/null
++++ b/hub/route/tailscale.go
+@@ -0,0 +1,193 @@
++//go:build with_gvisor && !no_tailscale
++
++package route
++
++import (
++	"context"
++	"net/netip"
++	"sort"
++	"strings"
++	"time"
++
++	"github.com/metacubex/mihomo/adapter/outbound"
++
++	"github.com/metacubex/chi"
++	"github.com/metacubex/chi/render"
++	"github.com/metacubex/http"
++	"github.com/metacubex/tailscale/ipn/ipnstate"
++)
++
++func tailscaleRouter() http.Handler {
++	r := chi.NewRouter()
++	r.Get("/status", getTailscaleStatus)
++	r.Post("/ping", pingTailscalePeer)
++	return r
++}
++
++type tailscalePeerView struct {
++	Hostname       string   `json:"hostname"`
++	DNSName        string   `json:"dnsName,omitempty"`
++	OS             string   `json:"os,omitempty"`
++	IPs            []string `json:"ips"`
++	Online         bool     `json:"online"`
++	Active         bool     `json:"active"`
++	ExitNode       bool     `json:"exitNode"`
++	ExitNodeOption bool     `json:"exitNodeOption"`
++	Relay          string   `json:"relay,omitempty"`
++	Endpoint       string   `json:"endpoint,omitempty"`
++	LastSeen       string   `json:"lastSeen,omitempty"`
++}
++
++type tailscaleStatusView struct {
++	Available       bool                `json:"available"`
++	BackendState    string              `json:"backendState"`
++	Version         string              `json:"version"`
++	Hostname        string              `json:"hostname"`
++	DNSName         string              `json:"dnsName,omitempty"`
++	Tailnet         string              `json:"tailnet,omitempty"`
++	MagicDNSSuffix  string              `json:"magicDnsSuffix,omitempty"`
++	MagicDNSEnabled bool                `json:"magicDnsEnabled"`
++	AuthURL         string              `json:"authUrl,omitempty"`
++	IPs             []string            `json:"ips"`
++	OS              string              `json:"os,omitempty"`
++	Health          []string            `json:"health"`
++	Self            *tailscalePeerView  `json:"self,omitempty"`
++	Peers           []tailscalePeerView `json:"peers"`
++}
++
++type tailscalePingRequest struct {
++	IP string `json:"ip"`
++}
++
++type tailscalePingView struct {
++	IP             string  `json:"ip"`
++	NodeIP         string  `json:"nodeIp,omitempty"`
++	NodeName       string  `json:"nodeName,omitempty"`
++	LatencySeconds float64 `json:"latencySeconds"`
++	Endpoint       string  `json:"endpoint,omitempty"`
++	Relay          string  `json:"relay,omitempty"`
++	Error          string  `json:"error,omitempty"`
++}
++
++func stringifyIPs(ips []netip.Addr) []string {
++	result := make([]string, 0, len(ips))
++	for _, ip := range ips {
++		result = append(result, ip.String())
++	}
++	return result
++}
++
++func tailscalePeerFromStatus(peer *ipnstate.PeerStatus) tailscalePeerView {
++	view := tailscalePeerView{
++		Hostname:       peer.HostName,
++		DNSName:        strings.TrimSuffix(peer.DNSName, "."),
++		OS:             peer.OS,
++		IPs:            stringifyIPs(peer.TailscaleIPs),
++		Online:         peer.Online,
++		Active:         peer.Active,
++		ExitNode:       peer.ExitNode,
++		ExitNodeOption: peer.ExitNodeOption,
++		Relay:          peer.Relay,
++		Endpoint:       peer.CurAddr,
++	}
++	if !peer.LastSeen.IsZero() {
++		view.LastSeen = peer.LastSeen.UTC().Format(time.RFC3339)
++	}
++	return view
++}
++
++func getTailscaleStatus(w http.ResponseWriter, r *http.Request) {
++	tailscale := outbound.LookupTailscale()
++	if tailscale == nil {
++		render.Status(r, http.StatusNotFound)
++		render.JSON(w, r, newError("Tailscale outbound is not loaded"))
++		return
++	}
++
++	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
++	defer cancel()
++	status, err := tailscale.Status(ctx)
++	if err != nil {
++		render.Status(r, http.StatusInternalServerError)
++		render.JSON(w, r, newError(err.Error()))
++		return
++	}
++
++	health := status.Health
++	if health == nil {
++		health = []string{}
++	}
++	view := tailscaleStatusView{
++		Available:    true,
++		BackendState: status.BackendState,
++		Version:      status.Version,
++		AuthURL:      status.AuthURL,
++		IPs:          stringifyIPs(status.TailscaleIPs),
++		Health:       health,
++		Peers:        make([]tailscalePeerView, 0, len(status.Peer)),
++	}
++	if status.CurrentTailnet != nil {
++		view.Tailnet = status.CurrentTailnet.Name
++		view.MagicDNSSuffix = status.CurrentTailnet.MagicDNSSuffix
++		view.MagicDNSEnabled = status.CurrentTailnet.MagicDNSEnabled
++	}
++	if status.MagicDNSSuffix != "" && view.MagicDNSSuffix == "" {
++		view.MagicDNSSuffix = status.MagicDNSSuffix
++	}
++	if status.Self != nil {
++		self := tailscalePeerFromStatus(status.Self)
++		view.Hostname = status.Self.HostName
++		view.DNSName = self.DNSName
++		view.OS = status.Self.OS
++		view.Self = &self
++	}
++	for _, peer := range status.Peer {
++		view.Peers = append(view.Peers, tailscalePeerFromStatus(peer))
++	}
++	sort.Slice(view.Peers, func(i, j int) bool {
++		return view.Peers[i].Hostname < view.Peers[j].Hostname
++	})
++
++	render.JSON(w, r, view)
++}
++
++func pingTailscalePeer(w http.ResponseWriter, r *http.Request) {
++	tailscale := outbound.LookupTailscale()
++	if tailscale == nil {
++		render.Status(r, http.StatusNotFound)
++		render.JSON(w, r, newError("Tailscale outbound is not loaded"))
++		return
++	}
++
++	var request tailscalePingRequest
++	if err := render.DecodeJSON(r.Body, &request); err != nil {
++		render.Status(r, http.StatusBadRequest)
++		render.JSON(w, r, ErrBadRequest)
++		return
++	}
++	ip, err := netip.ParseAddr(request.IP)
++	if err != nil {
++		render.Status(r, http.StatusBadRequest)
++		render.JSON(w, r, newError("Invalid Tailscale IP: "+request.IP))
++		return
++	}
++
++	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
++	defer cancel()
++	result, err := tailscale.Ping(ctx, ip)
++	if err != nil {
++		render.Status(r, http.StatusInternalServerError)
++		render.JSON(w, r, newError(err.Error()))
++		return
++	}
++
++	render.JSON(w, r, tailscalePingView{
++		IP:             result.IP,
++		NodeIP:         result.NodeIP,
++		NodeName:       result.NodeName,
++		LatencySeconds: result.LatencySeconds,
++		Endpoint:       result.Endpoint,
++		Relay:          result.DERPRegionCode,
++		Error:          result.Err,
++	})
++}
+diff --git a/hub/route/tailscale_stub.go b/hub/route/tailscale_stub.go
+new file mode 100644
+index 0000000..089e4de
+--- /dev/null
++++ b/hub/route/tailscale_stub.go
+@@ -0,0 +1,20 @@
++//go:build !with_gvisor || no_tailscale
++
++package route
++
++import (
++	"github.com/metacubex/chi"
++	"github.com/metacubex/chi/render"
++	"github.com/metacubex/http"
++)
++
++func tailscaleRouter() http.Handler {
++	r := chi.NewRouter()
++	unavailable := func(w http.ResponseWriter, r *http.Request) {
++		render.Status(r, http.StatusNotImplemented)
++		render.JSON(w, r, newError("Tailscale support is not compiled into this core"))
++	}
++	r.Get("/status", unavailable)
++	r.Post("/ping", unavailable)
++	return r
++}

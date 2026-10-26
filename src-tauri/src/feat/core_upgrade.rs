@@ -22,9 +22,39 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-const RELEASE_VERSION_URL: &str = "https://github.com/MetaCubeX/mihomo/releases/latest/download/version.txt";
-const ALPHA_BASE_URL: &str = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha";
-const RELEASE_DOWNLOAD_URL: &str = "https://github.com/MetaCubeX/mihomo/releases/download";
+/// Shared with `scripts/prebuild.mjs`; point `releaseRepo` at the fork that publishes the
+/// Tailscale-patched core.
+const CORE_RELEASE: &str = include_str!("../../core-release.json");
+
+fn release_repo() -> std::string::String {
+    serde_json::from_str::<serde_json::Value>(CORE_RELEASE)
+        .ok()
+        .and_then(|config| {
+            config
+                .get("releaseRepo")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned)
+        })
+        .unwrap_or_else(|| "MetaCubeX/mihomo".to_owned())
+}
+
+fn release_version_url() -> std::string::String {
+    format!(
+        "https://github.com/{}/releases/latest/download/version.txt",
+        release_repo()
+    )
+}
+
+fn alpha_base_url() -> std::string::String {
+    format!(
+        "https://github.com/{}/releases/download/Prerelease-Alpha",
+        release_repo()
+    )
+}
+
+fn release_download_url() -> std::string::String {
+    format!("https://github.com/{}/releases/download", release_repo())
+}
 const VERSION_TIMEOUT_SECS: u64 = 20;
 const PACKAGE_TIMEOUT_SECS: u64 = 300;
 /// Well above any real core package, low enough that a wrong response cannot exhaust memory.
@@ -176,9 +206,9 @@ fn package_url(alpha: bool, version: &str) -> Result<std::string::String> {
     let asset = asset_base_name(alpha)?;
     let extension = if cfg!(windows) { "zip" } else { "gz" };
     Ok(if alpha {
-        format!("{ALPHA_BASE_URL}/{asset}-{version}.{extension}")
+        format!("{}/{asset}-{version}.{extension}", alpha_base_url())
     } else {
-        format!("{RELEASE_DOWNLOAD_URL}/{version}/{asset}-{version}.{extension}")
+        format!("{}/{version}/{asset}-{version}.{extension}", release_download_url())
     })
 }
 
@@ -220,9 +250,9 @@ fn asset_base_name(alpha: bool) -> Result<&'static str> {
 #[tracing::instrument(skip_all, level = "debug", fields(alpha))]
 async fn resolve_latest_version(alpha: bool) -> Result<(ProxyType, std::string::String)> {
     let url = if alpha {
-        format!("{ALPHA_BASE_URL}/version.txt")
+        format!("{}/version.txt", alpha_base_url())
     } else {
-        RELEASE_VERSION_URL.to_owned()
+        release_version_url()
     };
     let mut last_error = None;
 
